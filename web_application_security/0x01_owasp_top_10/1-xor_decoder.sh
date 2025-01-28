@@ -1,17 +1,10 @@
 #!/bin/bash
 
-password="$1"
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 {xor}base64_string"
+    exit 1
+fi
 
-password="${password#'{xor}'}"
+encoded_input=${1#"{xor}"}
 
-decoded_password=$(echo -n "$password" | openssl enc -base64 -d)
-
-output=""
-
-for ((i = 0; i < ${#decoded_password}; i++)); do
-    char="${decoded_password:$i:1}"
-    xor_result=$(( $(printf "%d" "'$char") ^ 95 ))
-    output+=$(printf "\\$(printf '%03o' $xor_result)")
-done
-
-echo "$output"
+echo "$encoded_input" | base64 -d | perl -pe 's/(.)/chr(ord($1) ^ 0x5F)/ge'
