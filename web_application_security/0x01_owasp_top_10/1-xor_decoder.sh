@@ -1,23 +1,17 @@
 #!/bin/bash
 
 password="$1"
+
 password="${password#'{xor}'}"
-decoded_password=$(echo -n "$password" | base64 -d 2>/dev/null)
 
-# Check if base64 decoding succeeded
-if [ $? -ne 0 ]; then
-    echo "Error: Invalid Base64 input"
-    exit 1
-fi
+decoded_password=$(echo -n "$password" | openssl enc -base64 -d)
 
-# Convert decoded bytes to hex and process each byte
-hex=$(echo -n "$decoded_password" | xxd -p | tr -d '\n')
 output=""
-for ((i=0; i<${#hex}; i+=2)); do
-    byte_hex="${hex:i:2}"
-    byte_dec=$((16#$byte_hex))
-    xor_byte=$((byte_dec ^ 95))
-    output+=$(printf "\\x$(printf '%02x' $xor_byte)")
+
+for ((i = 0; i < ${#decoded_password}; i++)); do
+    char="${decoded_password:$i:1}"
+    xor_result=$(( $(printf "%d" "'$char") ^ 95 ))
+    output+=$(printf "\\$(printf '%03o' $xor_result)")
 done
 
-echo -en "$output"
+echo "$output"
