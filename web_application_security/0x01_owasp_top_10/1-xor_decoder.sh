@@ -1,35 +1,23 @@
 #!/bin/bash
 
-# Check if the required argument is provided
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 {xor}Base64EncodedString"
-    exit 1
-fi
-
-# Extract and clean the input
 password="$1"
-
-# Remove the '{xor}' prefix if it exists
 password="${password#'{xor}'}"
-
-# Decode the Base64 string
 decoded_password=$(echo -n "$password" | base64 -d 2>/dev/null)
 
-# Check if decoding was successful
+# Check if base64 decoding succeeded
 if [ $? -ne 0 ]; then
-    echo "Error: Invalid Base64 encoded string."
+    echo "Error: Invalid Base64 input"
     exit 1
 fi
 
-# Perform XOR decoding
+# Convert decoded bytes to hex and process each byte
+hex=$(echo -n "$decoded_password" | xxd -p | tr -d '\n')
 output=""
-xor_key=95 # The XOR key used in the encoding process
-for ((i = 0; i < ${#decoded_password}; i++)); do
-    char="${decoded_password:$i:1}"
-    char_ascii=$(printf '%d' "'$char")
-    xor_result=$((char_ascii ^ xor_key))
-    output+=$(printf "\\$(printf '%03o' $xor_result)")
+for ((i=0; i<${#hex}; i+=2)); do
+    byte_hex="${hex:i:2}"
+    byte_dec=$((16#$byte_hex))
+    xor_byte=$((byte_dec ^ 95))
+    output+=$(printf "\\x$(printf '%02x' $xor_byte)")
 done
 
-# Print the decoded result
-echo "$output"
+echo -en "$output"
