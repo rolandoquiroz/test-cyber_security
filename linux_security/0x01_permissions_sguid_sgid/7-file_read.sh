@@ -1,2 +1,2 @@
 #!/bin/bash
-find "$1" -type f -print0 | xargs -0 chmod o=r
+find "$1" -type f -exec chmod o=r {} +
