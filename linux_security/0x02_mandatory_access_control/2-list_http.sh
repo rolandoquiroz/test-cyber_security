@@ -1,2 +1,2 @@
 #!/bin/bash
-semanage port -a -t http_port_t -p tcp 81
+semanage port -l | grep -w http
