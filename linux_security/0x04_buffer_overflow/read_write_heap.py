@@ -6,12 +6,11 @@ Usage: read_write_heap.py pid search_string replace_string
 
 import sys
 import os
-import mmap
 
 
 def print_usage_and_exit():
     """Print usage information and exit with status code 1"""
-    print(f"Usage: {sys.argv[0]} pid search_string replace_string")
+    print("Usage: {} pid search_string replace_string".format(sys.argv[0]))
     sys.exit(1)
 
 
@@ -21,113 +20,110 @@ def parse_maps_file(pid):
     Returns tuple of (start_address, end_address) for the heap
     """
     try:
-        with open(f"/proc/{pid}/maps", 'r') as maps_file:
+        maps_filename = "/proc/{}/maps".format(pid)
+        with open(maps_filename, 'r') as maps_file:
             for line in maps_file:
                 if "[heap]" in line:
-                    # Extract addresses from line
+                    # Extract addresses from line that looks like:
+                    # address_start-address_end permissions offset ...
                     addresses = line.split()[0]
-                    start_addr, end_addr = addresses.split('-')
-                    return (int(start_addr, 16), int(end_addr, 16))
+                    start_address, end_address = addresses.split('-')
+                    # Convert from hex string to int
+                    return (int(start_address, 16), int(end_address, 16))
     except IOError as e:
-        print(f"Error: Can't open maps file - {e}")
+        print("Error: Can't open {} - {}".format(maps_filename, e))
         sys.exit(1)
 
     print("Error: No heap found in the maps file")
     sys.exit(1)
 
 
-def find_and_replace_in_memory(pid, start_address, end_address, search_bytes, replace_bytes):
+def read_memory(pid, start_address, end_address):
     """
-    Efficiently find and replace all occurrences of search_bytes in memory
-    Returns the number of replacements made
+    Read the memory of the process within the given address range
+    Returns the memory content as bytes
     """
-    mem_size = end_address - start_address
     try:
-        with open(f"/proc/{pid}/mem", 'rb+') as mem_file:
-            # Use memory mapping for more efficient access
+        mem_filename = "/proc/{}/mem".format(pid)
+        with open(mem_filename, 'rb+') as mem_file:
+            # Seek to the start address of the heap
             mem_file.seek(start_address)
-            # Create memory map for the heap region
-            mm = mmap.mmap(mem_file.fileno(), mem_size, offset=start_address)
-
-            # Find all occurrences and replace
-            count = 0
-            position = mm.find(search_bytes)
-
-            while position != -1:
-                # Write the replacement
-                mm.seek(position)
-                mm.write(replace_bytes)
-                count += 1
-
-                # Find next occurrence
-                mm.seek(position + len(search_bytes))
-                next_chunk = mm.read(mem_size - position - len(search_bytes))
-                next_pos = next_chunk.find(search_bytes)
-
-                if next_pos == -1:
-                    break
-                position += len(search_bytes) + next_pos
-
-            mm.close()
-            return count
-
+            # Read the entire heap
+            return mem_file.read(end_address - start_address)
     except IOError as e:
-        print(f"Error: Memory access failed - {e}")
+        print("Error: Can't open or read {} - {}".format(mem_filename, e))
         sys.exit(1)
-    except ValueError as e:
-        print(f"Error: Memory mapping failed - {e}")
+
+
+def write_to_memory(pid, address, data):
+    """
+    Write data to the specified address in the process memory
+    """
+    try:
+        mem_filename = "/proc/{}/mem".format(pid)
+        with open(mem_filename, 'rb+') as mem_file:
+            mem_file.seek(address)
+            mem_file.write(data)
+            return True
+    except IOError as e:
+        print("Error: Can't write to {} - {}".format(mem_filename, e))
         sys.exit(1)
 
 
 def main():
     """Main function to find and replace a string in the heap"""
-    # Check arguments
+    # Check if the correct number of arguments is provided
     if len(sys.argv) != 4:
         print_usage_and_exit()
 
-    # Parse arguments with error handling
+    # Parse arguments
     try:
         pid = int(sys.argv[1])
-        search_string = sys.argv[2]
-        replace_string = sys.argv[3]
-
-        if not search_string:
-            print("Error: Search string cannot be empty")
-            print_usage_and_exit()
-
-        # Get heap address range
-        start_address, end_address = parse_maps_file(pid)
-
-        # Prepare byte strings
-        search_bytes = search_string.encode('utf-8')
-        replace_bytes = replace_string.encode('utf-8')
-
-        # Pad or truncate replace bytes to match search bytes length
-        if len(replace_bytes) < len(search_bytes):
-            replace_bytes += b'\0' * (len(search_bytes) - len(replace_bytes))
-        else:
-            replace_bytes = replace_bytes[:len(search_bytes)]
-
-        # Find and replace all occurrences
-        replacements = find_and_replace_in_memory(
-            pid, start_address, end_address, search_bytes, replace_bytes)
-
-        if replacements > 0:
-            print(f"Successfully replaced {replacements} occurrence(s) in process {pid}")
-        else:
-            print(f"Error: String '{search_string}' not found in heap")
-            sys.exit(1)
-
     except ValueError:
         print("Error: PID must be an integer")
         print_usage_and_exit()
-    except PermissionError as e:
-        print(f"Error: Permission denied - {e}")
-        print("Note: This script requires root privileges to access process memory")
+
+    search_string = sys.argv[2]
+    replace_string = sys.argv[3]
+
+    # Validate strings - search string cannot be empty
+    # But replace string CAN be empty (this is a valid use case)
+    if len(search_string) < 1:
+        print("Error: Search string cannot be empty")
+        print_usage_and_exit()
+
+    # Get heap address range
+    start_address, end_address = parse_maps_file(pid)
+
+    # Read memory from the heap
+    heap_memory = read_memory(pid, start_address, end_address)
+
+    # Search for the string in the heap
+    search_bytes = search_string.encode('ASCII')
+    replace_bytes = replace_string.encode('ASCII')
+
+    # Pad the replace bytes to match the length of search bytes if shorter
+    # or truncate if longer
+    if len(replace_bytes) < len(search_bytes):
+        replace_bytes_padded = replace_bytes + b'\0' * (
+            len(search_bytes) - len(replace_bytes))
+    else:
+        replace_bytes_padded = replace_bytes[:len(search_bytes)]
+
+    # Find all occurrences of the search string
+    position = heap_memory.find(search_bytes)
+    if position == -1:
+        print("Error: String '{}' not found in heap".format(search_string))
         sys.exit(1)
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+
+    # Calculate the actual address in the process memory
+    target_address = start_address + position
+
+    # Write the replace string to the process memory
+    write_to_memory(pid, target_address, replace_bytes_padded)
+
+    # Print success message
+    print("SUCCESS!")
 
 
 if __name__ == "__main__":
