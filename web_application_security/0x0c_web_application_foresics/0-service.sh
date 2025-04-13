@@ -1,2 +1,2 @@
 #!/bin/bash
-grep "sshd" auth.log | awk '{for (i=1; i<=NF; i++) count[$i]++} END {for (word in count) print count[word], word}' | sort -nr
+grep "sshd" auth.log | tr -s ' ' '\n' | grep -v "^$" | sort | uniq -c | sort -nr
