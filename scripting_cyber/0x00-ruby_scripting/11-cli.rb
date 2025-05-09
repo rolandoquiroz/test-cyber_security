@@ -34,6 +34,7 @@ end
 # List all tasks
 if options[:list]
   if File.exist?(TASKS_FILE)
+    puts "Tasks:"
     File.readlines(TASKS_FILE).each_with_index do |task, i|
       puts "#{i + 1}. #{task.strip}"
     end
