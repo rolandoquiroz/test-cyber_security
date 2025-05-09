@@ -2,24 +2,36 @@
 require 'optparse'
 
 TASKS_FILE = 'tasks.txt'
-
 options = {}
+
 OptionParser.new do |opts|
   opts.banner = "Usage: cli.rb [options]"
 
-  opts.on('-aTASK', '--add=TASK', 'Add a new task') { |task| options[:add] = task }
-  opts.on('-l', '--list', 'List all tasks')         { options[:list] = true }
-  opts.on('-rINDEX', '--remove=INDEX', 'Remove a task by index') { |i| options[:remove] = i.to_i }
-  opts.on('-h', '--help', 'Show help')              { puts opts; exit }
+  opts.on('-a TASK', '--add TASK', 'Add a new task') do |task|
+    options[:add] = task
+  end
+
+  opts.on('-l', '--list', 'List all tasks') do
+    options[:list] = true
+  end
+
+  opts.on('-r INDEX', '--remove INDEX', 'Remove a task by index') do |index|
+    options[:remove] = index.to_i
+  end
+
+  opts.on('-h', '--help', 'Show help') do
+    puts opts
+    exit
+  end
 end.parse!
 
-# Add task
+# Add a task
 if options[:add]
   File.open(TASKS_FILE, 'a') { |f| f.puts(options[:add]) }
   puts "Task '#{options[:add]}' added."
 end
 
-# List tasks
+# List all tasks
 if options[:list]
   if File.exist?(TASKS_FILE)
     File.readlines(TASKS_FILE).each_with_index do |task, i|
@@ -30,7 +42,7 @@ if options[:list]
   end
 end
 
-# Remove task
+# Remove a task
 if options[:remove]
   if File.exist?(TASKS_FILE)
     tasks = File.readlines(TASKS_FILE).map(&:strip)
