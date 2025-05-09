@@ -3,11 +3,12 @@ require 'digest'
 
 abort("Usage: #{$0} HASHED_PASSWORD DICTIONARY_FILE") if ARGV.size != 2
 
-hash, file = ARGV
-File.foreach(file) { |word|
+hash, dictionary_file = ARGV
+File.foreach(dictionary_file) do |word|
   if Digest::SHA256.hexdigest(word.chomp) == hash
-    abort("Password found: #{word.chomp}")
+    puts "Password found: #{word.chomp}"
+    exit
   end
-}
+end
 
 puts "Password not found in dictionary."
