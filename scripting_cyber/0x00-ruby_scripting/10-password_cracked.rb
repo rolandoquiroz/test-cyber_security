@@ -1,14 +1,19 @@
+
 #!/usr/bin/env ruby
 require 'digest'
 
-abort("Usage: #{$0} HASHED_PASSWORD DICTIONARY_FILE") if ARGV.size != 2
+if ARGV.size != 2
+  puts "Usage: #{$0} HASHED_PASSWORD DICTIONARY_FILE"
+  exit 1
+end
 
 hashed_password, dictionary_file = ARGV
+
 File.foreach(dictionary_file) do |word|
-  word.chomp!
+  word = word.chomp
   if Digest::SHA256.hexdigest(word) == hashed_password
     puts "Password found: #{word}"
-    exit
+    exit 0
   end
 end
 
